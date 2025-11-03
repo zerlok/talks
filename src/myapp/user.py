@@ -1,4 +1,16 @@
 from dataclasses import dataclass, field
+from datetime import datetime
+
+
+@dataclass(frozen=True, kw_only=True)
+class PasswordCredentials:
+    username: str
+    password: str = field(repr=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class TokenCredentials:
+    token: str = field(repr=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -9,6 +21,10 @@ class UserInfo:
 
 
 @dataclass(frozen=True, kw_only=True)
-class Credentials:
-    username: str
-    password: str = field(repr=False)
+class SessionInfo(TokenCredentials):
+    created_at: datetime
+    expires_at: datetime
+
+
+# noinspection PyCompatibility
+type Credentials = PasswordCredentials | TokenCredentials

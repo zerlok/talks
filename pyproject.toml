@@ -66,8 +66,8 @@ keep-runtime-typing = true
 files = ["src", "tests"]
 strict = true
 disallow_any_unimported = true
-#disallow_any_expr = true
-#disallow_any_explicit = true
+disallow_any_expr = true
+disallow_any_explicit = true
 disallow_any_decorated = true
 disallow_any_generics = true
 disallow_subclassing_any = true
@@ -120,7 +120,6 @@ asyncio_mode = "auto"
 
 [tool.coverage.run]
 branch = true
-patch = ["subprocess"]
 
 [tool.coverage.report]
 exclude_lines = [
