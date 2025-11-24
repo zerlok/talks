@@ -1,3 +1,4 @@
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 import pytest
@@ -5,35 +6,29 @@ from _pytest.fixtures import SubRequest
 
 from myapp.auth import ExpiredSessionError, InvalidCredentialsError, SimpleInsecureAuthenticator
 from myapp.user import PasswordCredentials, SessionInfo, UserInfo
-from tests.stubs.any import any_of_type
-from tests.stubs.time import ManualTimeTicker
-
-# common cases are reused
-USER_CASES = pytest.mark.parametrize(
-    ("username", "password"),
-    [
-        pytest.param("John", "secret123", id="John"),
-        pytest.param("Alice", "password123", id="Alice"),
-    ],
-)
+from tests.mimic.any import of_type
+from tests.mimic.time import ManualTimeTicker
 
 
-@USER_CASES
+@dataclass(frozen=True)
+class UserCase:
+    username: str
+    password: str = field(repr=False)
+
+
 def test_can_register_user_with_proper_fields(
     auth: SimpleInsecureAuthenticator,
-    username: str,
-    password: str,
+    case: UserCase,
 ) -> None:
-    assert auth.register(username, password) == UserInfo(
-        id_=any_of_type(int),
-        name=username,
-        password=any_of_type(str),
+    assert auth.register(case.username, case.password) == UserInfo(
+        id_=of_type(int),
+        name=case.username,
+        password=of_type(str),
     )
 
 
 # 1) arrange via fixtures
 # 2) one behavior is tested - one assert
-@USER_CASES
 def test_can_authenticate_registered_user(
     auth: SimpleInsecureAuthenticator,
     registered_user: UserInfo,
@@ -53,29 +48,17 @@ def test_cant_authenticate_non_registered_user(
 # 1) proper naming (arrange and act are clear)
 # 2) reuse `registered_user`, `credentials` fixtures, but inject incorrect password to creds
 @pytest.mark.parametrize("credentials_password", [pytest.param("incorrect user password")])
-@USER_CASES
 def test_cant_authenticate_registered_user_with_incorrect_password(
     auth: SimpleInsecureAuthenticator,
     registered_user: UserInfo,
     credentials: PasswordCredentials,
-    password: str,  # NOTE: if not set - pytest error occurs: function uses no argument 'password'
 ) -> None:
     with pytest.raises(InvalidCredentialsError):
         auth.authenticate(credentials)
 
 
-@USER_CASES
-def test_registered_user_can_login(
-    auth: SimpleInsecureAuthenticator,
-    registered_user: UserInfo,
-    credentials: PasswordCredentials,
-) -> None:
-    assert auth.login(credentials) == any_of_type(SessionInfo)
-
-
 @pytest.mark.parametrize("ttl", [pytest.param(timedelta(hours=12))])
-@USER_CASES
-def test_login_session_has_appropriate_fields(
+def test_login_session_has_proper_fields(
     auth: SimpleInsecureAuthenticator,
     registered_user: UserInfo,
     credentials: PasswordCredentials,
@@ -83,7 +66,7 @@ def test_login_session_has_appropriate_fields(
     ttl: timedelta,
 ) -> None:
     assert auth.login(credentials) == SessionInfo(
-        token=any_of_type(str),
+        token=of_type(str),
         created_at=ticker(),
         expires_at=ticker() + ttl,
     )
@@ -106,7 +89,6 @@ def test_non_registered_user_cant_login(
         pytest.param(timedelta(hours=11, minutes=59, seconds=59), id="1 second before expired"),
     ],
 )
-@USER_CASES
 def test_user_can_be_authenticated_by_logged_in_session(
     auth: SimpleInsecureAuthenticator,
     registered_user: UserInfo,
@@ -123,7 +105,6 @@ def test_user_can_be_authenticated_by_logged_in_session(
         pytest.param(timedelta(hours=12, seconds=1), id="1 second after expired"),
     ],
 )
-@USER_CASES
 def test_logged_in_session_expires_after_ttl(
     auth: SimpleInsecureAuthenticator,
     registered_user: UserInfo,
@@ -134,9 +115,20 @@ def test_logged_in_session_expires_after_ttl(
         auth.authenticate(logged_in_session)
 
 
+# common cases are reused
+@pytest.fixture(
+    params=[
+        UserCase("John", "secret123"),
+        UserCase("Alice", "password123"),
+    ],
+)
+def case(request: SubRequest) -> UserCase:
+    return request.param
+
+
 @pytest.fixture
 def ticker() -> ManualTimeTicker:
-    # NOTE: use constant start time to make tests more reproducible
+    # NOTE: use constant start time to make tests reproducible
     return ManualTimeTicker(datetime(2025, 1, 1))
 
 
@@ -153,28 +145,18 @@ def auth(ticker: ManualTimeTicker) -> SimpleInsecureAuthenticator:
 
 # NOTE: `username` and `password` fixtures are not defined. Values are injected via parametrize mark.
 @pytest.fixture
-def registered_user(auth: SimpleInsecureAuthenticator, username: str, password: str) -> UserInfo:
-    return auth.register(username, password)
+def registered_user(auth: SimpleInsecureAuthenticator, case: UserCase) -> UserInfo:
+    return auth.register(case.username, case.password)
 
 
-# NOTE: build `username` for common cases (each test will use appropriate value);
-# But if `username` fixture is used (e.g. via parametrize) - use that value.
 @pytest.fixture
-def credentials_username(request: SubRequest) -> str:
-    if "username" in request.fixturenames:
-        return request.getfixturevalue("username")
-
-    return f"Username for {request.node.name}"
+def credentials_username(case: UserCase) -> str:
+    return case.username
 
 
-# NOTE: build `password` for common cases (each test will use appropriate value);
-# But if `password` fixture is used (e.g. via parametrize) - use that value.
 @pytest.fixture
-def credentials_password(request: SubRequest) -> str:
-    if "password" in request.fixturenames:
-        return request.getfixturevalue("password")
-
-    return f"Password for {request.node.name}"
+def credentials_password(case: UserCase) -> str:
+    return case.password
 
 
 @pytest.fixture

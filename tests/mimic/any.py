@@ -9,23 +9,23 @@ class _AnyValue:
         self.__predicate = predicate
 
     @t.override
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.__predicate!r})"
+
+    @t.override
     def __eq__(self, other: object) -> bool:
         return self.__predicate(other)
 
 
-def create_any(predicate: t.Callable[[object], bool]) -> t.Any:
-    return t.cast("t.Any", _AnyValue(predicate))
-
-
 def any_value() -> t.Any:
-    def check(obj: object) -> bool:
+    def check(_: object) -> bool:
         return True
 
     return t.cast("t.Any", _AnyValue(check))
 
 
-def any_of_type(of_type: type[T]) -> T:
+def of_type(type_: type[T]) -> T:
     def check(obj: object) -> bool:
-        return isinstance(obj, of_type)
+        return isinstance(obj, type_)
 
     return t.cast("T", _AnyValue(check))
